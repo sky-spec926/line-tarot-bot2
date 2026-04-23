@@ -1,7 +1,7 @@
 import os
 import random
 from anthropic import AsyncAnthropic
-from tarot_cards import MAJOR_ARCANA
+from tarot_cards import FULL_DECK
 
 _SYSTEM_PROMPT = """あなたは経験豊富なタロット占い師です。温かみがあり、洞察力に優れた占い師として、引かれたカードを丁寧に解釈します。
 
@@ -12,7 +12,8 @@ _SYSTEM_PROMPT = """あなたは経験豊富なタロット占い師です。温
 - 正位置・逆位置を正確に踏まえて解釈する
 - 具体的なアドバイスを含める
 - 神秘的だが理解しやすい表現を使う
-- LINEメッセージとして読みやすい改行を使う"""
+- LINEメッセージとして読みやすい改行を使う
+- メジャーアルカナ・マイナーアルカナ両方を適切に解釈する"""
 
 _SPREAD_POSITIONS = {3: ["過去", "現在", "未来"]}
 _SPREAD_NAMES = {1: "一枚引き", 3: "過去・現在・未来"}
@@ -23,7 +24,7 @@ class TarotReader:
         self.client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     def draw_cards(self, n: int) -> list[dict]:
-        selected = random.sample(MAJOR_ARCANA, min(n, len(MAJOR_ARCANA)))
+        selected = random.sample(FULL_DECK, min(n, len(FULL_DECK)))
         return [{**card, "reversed": random.choice([True, False])} for card in selected]
 
     def _format_header(self, cards: list[dict], num_cards: int) -> str:
@@ -53,7 +54,7 @@ class TarotReader:
             "上記のカードで占いの結果をお伝えください。"
         )
 
-    async def get_reading_async(self, question: str, num_cards: int = 1) -> str:
+    async def get_reading_async(self, question: str, num_cards: int = 1) -> tuple[str, list[dict]]:
         cards = self.draw_cards(num_cards)
         header = self._format_header(cards, num_cards)
         prompt = self._build_prompt(cards, question, num_cards)
@@ -71,4 +72,5 @@ class TarotReader:
             messages=[{"role": "user", "content": prompt}],
         )
 
-        return f"{header}\n\n{response.content[0].text}"
+        reply = f"{header}\n\n{response.content[0].text}"
+        return reply, cards

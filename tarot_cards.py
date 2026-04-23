@@ -22,3 +22,34 @@ MAJOR_ARCANA = [
     {"id": 20, "en_name": "Judgement",           "ja_name": "審判",       "emoji": "📯"},
     {"id": 21, "en_name": "The World",           "ja_name": "世界",       "emoji": "🌍"},
 ]
+
+_SUITS = [
+    {"en": "Wands",     "ja": "ワンド",     "emoji": "🔥"},
+    {"en": "Cups",      "ja": "カップ",     "emoji": "🍷"},
+    {"en": "Swords",    "ja": "ソード",     "emoji": "🗡️"},
+    {"en": "Pentacles", "ja": "ペンタクル", "emoji": "💰"},
+]
+_NUM_JA   = ["", "エース", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
+_COURT_JA = [("Page", "ペイジ"), ("Knight", "ナイト"), ("Queen", "クイーン"), ("King", "キング")]
+
+
+def _build_minor() -> list[dict]:
+    cards = []
+    for suit in _SUITS:
+        for n in range(1, 11):
+            cards.append({
+                "en_name": f"{'Ace' if n == 1 else n} of {suit['en']}",
+                "ja_name": f"{suit['ja']}の{_NUM_JA[n]}",
+                "emoji":   suit["emoji"],
+            })
+        for en_c, ja_c in _COURT_JA:
+            cards.append({
+                "en_name": f"{en_c} of {suit['en']}",
+                "ja_name": f"{suit['ja']}の{ja_c}",
+                "emoji":   suit["emoji"],
+            })
+    return cards
+
+
+MINOR_ARCANA = _build_minor()
+FULL_DECK = MAJOR_ARCANA + MINOR_ARCANA  # 78枚
