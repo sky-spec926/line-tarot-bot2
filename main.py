@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     AsyncApiClient,
@@ -440,6 +441,150 @@ async def payment_success() -> dict:
 @app.get("/payment-cancel")
 async def payment_cancel() -> dict:
     return {"message": "お支払いがキャンセルされました。またのご利用をお待ちしております。"}
+
+
+# ── Landing page ───────────────────────────────────────────────────────────────
+
+_LINE_ADD_URL = os.environ.get("LINE_ADD_URL", "https://lin.ee/8Ednhbn")
+
+_LANDING_HTML = """<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIタロット占い</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+      background: linear-gradient(135deg, #1a0533 0%, #2d1b4e 50%, #0d1b3e 100%);
+      min-height: 100vh; color: #e8d5ff; display: flex;
+      flex-direction: column; align-items: center;
+    }}
+    header {{
+      width: 100%; padding: 20px;
+      text-align: center; background: rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(200,150,255,0.2);
+    }}
+    header h1 {{ font-size: 1.8rem; letter-spacing: 0.1em; }}
+    header p  {{ font-size: 0.9rem; color: #c8a8ff; margin-top: 4px; }}
+    main {{
+      max-width: 720px; width: 100%; padding: 40px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 32px;
+    }}
+    .hero {{
+      text-align: center;
+    }}
+    .hero .emoji {{ font-size: 4rem; }}
+    .hero h2 {{ font-size: 1.6rem; margin: 12px 0 8px; }}
+    .hero p  {{ color: #c8a8ff; line-height: 1.7; }}
+    .plans {{
+      width: 100%; display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px;
+    }}
+    .plan {{
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(200,150,255,0.25);
+      border-radius: 12px; padding: 20px 16px; text-align: center;
+    }}
+    .plan h3 {{ font-size: 0.95rem; color: #c8a8ff; margin-bottom: 8px; }}
+    .plan .price {{ font-size: 1.3rem; font-weight: bold; color: #fff; }}
+    .plan ul {{ list-style: none; margin-top: 10px; font-size: 0.8rem;
+               color: #bba8d8; text-align: left; line-height: 1.8; }}
+    .plan.highlight {{ border-color: #a855f7; background: rgba(168,85,247,0.12); }}
+    .cta {{
+      background: #06c755; color: #fff; font-size: 1.1rem; font-weight: bold;
+      padding: 16px 40px; border-radius: 50px; text-decoration: none;
+      display: inline-block; transition: opacity 0.2s;
+    }}
+    .cta:hover {{ opacity: 0.85; }}
+    .contact {{
+      font-size: 0.85rem; color: #9b8ab8; text-align: center; line-height: 1.8;
+    }}
+    footer {{
+      margin-top: auto; padding: 20px; font-size: 0.78rem;
+      color: #6b5b8a; text-align: center;
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🔮 AIタロット占い</h1>
+    <p>LINEで使える本格AIタロット</p>
+  </header>
+  <main>
+    <div class="hero">
+      <div class="emoji">✨🃏✨</div>
+      <h2>AIが本格タロット占いをお届け</h2>
+      <p>
+        78枚フルデッキのタロットをAIが解釈。<br>
+        恋愛・仕事・金運など、あらゆるお悩みに寄り添います。<br>
+        LINEから気軽にご利用いただけます。
+      </p>
+    </div>
+
+    <div class="plans">
+      <div class="plan">
+        <h3>無料プラン</h3>
+        <div class="price">無料</div>
+        <ul>
+          <li>・1枚引き</li>
+          <li>・1日3回まで</li>
+          <li>・基本的な解釈</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>お試しプラン</h3>
+        <div class="price">¥500</div>
+        <ul>
+          <li>・1枚・3枚引き</li>
+          <li>・1日5回まで</li>
+          <li>・占い履歴5件</li>
+          <li>・30日間</li>
+        </ul>
+      </div>
+      <div class="plan highlight">
+        <h3>ベーシック</h3>
+        <div class="price">¥980/月</div>
+        <ul>
+          <li>・〜5枚引き</li>
+          <li>・無制限</li>
+          <li>・テーマ別占い</li>
+          <li>・履歴20件</li>
+        </ul>
+      </div>
+      <div class="plan">
+        <h3>プレミアム</h3>
+        <div class="price">¥1,980/月</div>
+        <ul>
+          <li>・ケルト十字10枚</li>
+          <li>・無制限</li>
+          <li>・毎日の運勢</li>
+          <li>・相性占い</li>
+          <li>・履歴無制限</li>
+        </ul>
+      </div>
+    </div>
+
+    <a class="cta" href="{line_add_url}" target="_blank">
+      LINE で今すぐ無料で試す
+    </a>
+
+    <div class="contact">
+      <p>運営: AITAROT</p>
+      <p>サポート電話: +81 90 7015 2119</p>
+      <p>お問い合わせはLINEのチャットよりお願いします。</p>
+    </div>
+  </main>
+  <footer>
+    &copy; 2025 AITAROT. All rights reserved.
+  </footer>
+</body>
+</html>"""
+
+
+@app.get("/", response_class=HTMLResponse)
+async def landing() -> HTMLResponse:
+    return HTMLResponse(_LANDING_HTML.format(line_add_url=_LINE_ADD_URL))
 
 
 # ── Health check ───────────────────────────────────────────────────────────────

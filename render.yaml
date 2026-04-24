@@ -23,3 +23,5 @@ services:
         sync: false
       - key: APP_BASE_URL
         sync: false
+      - key: LINE_ADD_URL
+        sync: false
