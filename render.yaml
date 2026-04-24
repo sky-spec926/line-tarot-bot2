@@ -11,3 +11,15 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_TRIAL
+        sync: false
+      - key: STRIPE_PRICE_BASIC
+        sync: false
+      - key: STRIPE_PRICE_PREMIUM
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
