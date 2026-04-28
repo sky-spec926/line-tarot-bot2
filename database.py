@@ -42,6 +42,15 @@ async def init_db() -> None:
                 PRIMARY KEY (user_id, date)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS contact_messages (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL,
+                email      TEXT NOT NULL,
+                message    TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         await db.commit()
 
 
@@ -142,6 +151,15 @@ async def save_reading(
                 json.dumps(slim, ensure_ascii=False),
                 reply,
             ),
+        )
+        await db.commit()
+
+
+async def save_contact(name: str, email: str, message: str) -> None:
+    async with aiosqlite.connect(_DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO contact_messages (name, email, message, created_at) VALUES (?, ?, ?, ?)",
+            (name, email, message, datetime.now().strftime("%Y/%m/%d %H:%M")),
         )
         await db.commit()
 

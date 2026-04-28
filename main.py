@@ -26,6 +26,7 @@ from database import (
     get_user_by_stripe_customer,
     increment_daily_usage,
     init_db,
+    save_contact as _save_contact,
     save_reading,
     update_user_plan,
 )
@@ -497,8 +498,46 @@ _LANDING_HTML = """<!DOCTYPE html>
       display: inline-block; transition: opacity 0.2s;
     }}
     .cta:hover {{ opacity: 0.85; }}
-    .contact {{
-      font-size: 0.85rem; color: #9b8ab8; text-align: center; line-height: 1.8;
+    .contact-form {{
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(200,150,255,0.2);
+      border-radius: 16px; padding: 32px 24px;
+    }}
+    .contact-form h2 {{
+      font-size: 1.2rem; margin-bottom: 20px; text-align: center;
+    }}
+    .form-group {{ margin-bottom: 16px; }}
+    .form-group label {{
+      display: block; font-size: 0.85rem; color: #c8a8ff; margin-bottom: 6px;
+    }}
+    .form-group input,
+    .form-group textarea {{
+      width: 100%; padding: 12px 14px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(200,150,255,0.3);
+      border-radius: 8px; color: #e8d5ff; font-size: 0.95rem;
+      outline: none; transition: border-color 0.2s;
+      font-family: inherit;
+    }}
+    .form-group input:focus,
+    .form-group textarea:focus {{
+      border-color: #a855f7;
+    }}
+    .form-group textarea {{ height: 120px; resize: vertical; }}
+    .form-submit {{
+      width: 100%; padding: 14px;
+      background: #7c3aed; color: #fff; font-size: 1rem; font-weight: bold;
+      border: none; border-radius: 8px; cursor: pointer; transition: opacity 0.2s;
+    }}
+    .form-submit:hover {{ opacity: 0.85; }}
+    .form-note {{
+      font-size: 0.78rem; color: #9b8ab8; text-align: center;
+      margin-top: 10px;
+    }}
+    #form-success {{
+      display: none; text-align: center; padding: 20px;
+      color: #a8f0c8; font-size: 1rem;
     }}
     footer {{
       margin-top: auto; padding: 20px; font-size: 0.78rem;
@@ -569,15 +608,65 @@ _LANDING_HTML = """<!DOCTYPE html>
       LINE で今すぐ無料で試す
     </a>
 
-    <div class="contact">
-      <p>運営: AITAROT</p>
-      <p>サポート電話: +81 90 7015 2119</p>
-      <p>お問い合わせはLINEのチャットよりお願いします。</p>
+    <div class="contact-form">
+      <h2>📩 お問い合わせ</h2>
+      <form id="contact-form">
+        <div class="form-group">
+          <label for="name">お名前 <span style="color:#f87171">*</span></label>
+          <input type="text" id="name" name="name" placeholder="山田 太郎" required>
+        </div>
+        <div class="form-group">
+          <label for="email">メールアドレス <span style="color:#f87171">*</span></label>
+          <input type="email" id="email" name="email" placeholder="example@email.com" required>
+        </div>
+        <div class="form-group">
+          <label for="message">お問い合わせ内容 <span style="color:#f87171">*</span></label>
+          <textarea id="message" name="message" placeholder="ご質問・ご要望をご記入ください" required></textarea>
+        </div>
+        <button type="submit" class="form-submit">送信する</button>
+        <p class="form-note">通常2〜3営業日以内にご返信いたします。</p>
+      </form>
+      <div id="form-success">
+        ✅ お問い合わせを受け付けました。<br>ご返信までしばらくお待ちください。
+      </div>
     </div>
+
+    <p style="font-size:0.8rem; color:#6b5b8a;">運営: AITAROT</p>
   </main>
   <footer>
     &copy; 2025 AITAROT. All rights reserved.
   </footer>
+  <script>
+    document.getElementById('contact-form').addEventListener('submit', async function(e) {{
+      e.preventDefault();
+      const btn = this.querySelector('.form-submit');
+      btn.disabled = true;
+      btn.textContent = '送信中...';
+      try {{
+        const res = await fetch('/contact', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/json'}},
+          body: JSON.stringify({{
+            name: document.getElementById('name').value,
+            email: document.getElementById('email').value,
+            message: document.getElementById('message').value
+          }})
+        }});
+        if (res.ok) {{
+          document.getElementById('contact-form').style.display = 'none';
+          document.getElementById('form-success').style.display = 'block';
+        }} else {{
+          btn.disabled = false;
+          btn.textContent = '送信する';
+          alert('送信に失敗しました。しばらく経ってから再度お試しください。');
+        }}
+      }} catch(err) {{
+        btn.disabled = false;
+        btn.textContent = '送信する';
+        alert('送信に失敗しました。しばらく経ってから再度お試しください。');
+      }}
+    }});
+  </script>
 </body>
 </html>"""
 
@@ -585,6 +674,18 @@ _LANDING_HTML = """<!DOCTYPE html>
 @app.get("/", response_class=HTMLResponse)
 async def landing() -> HTMLResponse:
     return HTMLResponse(_LANDING_HTML.format(line_add_url=_LINE_ADD_URL))
+
+
+@app.post("/contact")
+async def contact(request: Request) -> dict:
+    data = await request.json()
+    name    = str(data.get("name", "")).strip()
+    email   = str(data.get("email", "")).strip()
+    message = str(data.get("message", "")).strip()
+    if not name or not email or not message:
+        raise HTTPException(status_code=400, detail="必須項目が不足しています")
+    await _save_contact(name, email, message)
+    return {"status": "ok"}
 
 
 # ── Health check ───────────────────────────────────────────────────────────────
