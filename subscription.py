@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -21,6 +21,8 @@ class PlanConfig:
     themes_allowed: list
     has_daily_fortune: bool
     has_compatibility: bool
+    has_numerology: bool
+    has_personal_reading: bool
     features_display: list
 
 
@@ -36,6 +38,8 @@ PLANS: dict = {
         themes_allowed=[],
         has_daily_fortune=False,
         has_compatibility=False,
+        has_numerology=False,
+        has_personal_reading=False,
         features_display=[
             "・1枚引き",
             "・1日3回まで",
@@ -53,6 +57,8 @@ PLANS: dict = {
         themes_allowed=[],
         has_daily_fortune=False,
         has_compatibility=False,
+        has_numerology=False,
+        has_personal_reading=False,
         features_display=[
             "・1枚引き・3枚引き（過去・現在・未来）",
             "・1日5回まで",
@@ -71,12 +77,15 @@ PLANS: dict = {
         themes_allowed=["恋愛", "仕事", "金運"],
         has_daily_fortune=False,
         has_compatibility=False,
+        has_numerology=True,
+        has_personal_reading=False,
         features_display=[
             "・1枚〜5枚引き",
             "・無制限",
             "・詳しい解釈",
             "・占い履歴20件",
             "・テーマ別占い（恋愛・仕事・金運）",
+            "・数秘術（運命数鑑定）",
         ],
     ),
     PlanType.PREMIUM: PlanConfig(
@@ -90,6 +99,8 @@ PLANS: dict = {
         themes_allowed=["恋愛", "仕事", "金運", "健康", "人間関係"],
         has_daily_fortune=True,
         has_compatibility=True,
+        has_numerology=True,
+        has_personal_reading=True,
         features_display=[
             "・全スプレッド（〜10枚ケルト十字）",
             "・無制限",
@@ -98,6 +109,8 @@ PLANS: dict = {
             "・テーマ別占い（5テーマ）",
             "・毎日の運勢",
             "・相性占い",
+            "・数秘術（運命数鑑定）",
+            "・個人鑑定（お名前＋生年月日）",
         ],
     ),
 }

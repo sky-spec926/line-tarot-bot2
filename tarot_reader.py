@@ -154,3 +154,54 @@ class TarotReader:
             detail_level="premium",
             theme="恋愛",
         )
+
+    async def get_numerology_reading(self, birthdate: str, life_path: int) -> str:
+        prompt = (
+            f"生年月日: {birthdate}\n"
+            f"ライフパスナンバー（運命数）: {life_path}\n\n"
+            "この方の数秘術の鑑定をお願いします。"
+        )
+        system = """あなたは経験豊富な数秘術師です。
+- 日本語で回答する
+- ライフパスナンバーの意味を詳しく解説する
+- 性格・才能・人生のテーマを説明する
+- 今年の個人年数（パーソナルイヤー）も計算して解説する
+- 恋愛・仕事・金運へのアドバイスを含める
+- 温かみのある前向きなトーンを心がける
+- 500〜600文字程度でまとめる
+- LINEメッセージとして読みやすい改行を使う"""
+        response = await self.client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=800,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return f"🔢 数秘術鑑定結果\n生年月日: {birthdate}\nライフパスナンバー: {life_path}\n\n{response.content[0].text}"
+
+    async def get_personal_reading(self, name: str, birthdate: str, life_path: int) -> tuple:
+        cards = self.draw_cards(3)
+        header = self._format_header(cards, 3)
+        prompt = self._build_prompt(cards, f"{name}様の総合運・人生の流れ", 3)
+        system = f"""あなたは最高峰のタロット占い師兼数秘術師です。
+お客様の情報を踏まえた、最高にパーソナライズされた鑑定を行います。
+お客様情報:
+- お名前: {name}様
+- 生年月日: {birthdate}
+- ライフパスナンバー: {life_path}
+
+- 日本語で回答する
+- 必ず「{name}様」とお名前で呼びかける
+- ライフパスナンバー{life_path}の特性をタロット解釈に組み込む
+- 正位置・逆位置を正確に踏まえて解釈する
+- 600〜750文字程度でまとめる
+- 深い洞察と温かみのあるトーンを心がける
+- 具体的で実践的なアドバイスを5つ以上含める
+- LINEメッセージとして読みやすい改行を使う"""
+        response = await self.client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": prompt}],
+        )
+        reply = f"🌟 {name}様への個人鑑定\n\n{header}\n\n{response.content[0].text}"
+        return reply, cards

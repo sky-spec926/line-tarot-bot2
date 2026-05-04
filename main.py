@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -62,9 +64,13 @@ _HELP = """🔮 タロット占いの使い方
 【テーマ別占い】（ベーシック以上）
 ・「恋愛占い」「仕事占い」「金運占い」など
 
+【ベーシック以上】
+・「数秘術」→ 生年月日から運命数を鑑定
+
 【プレミアム専用】
 ・「今日の運勢」→ デイリー占い
 ・「相性占い ○○」→ 相性を占う
+・「個人鑑定」→ お名前＋生年月日でパーソナル鑑定
 
 【その他】
 ・「履歴」→ 占い履歴
@@ -80,6 +86,8 @@ _PLAN_CMDS          = {"プラン", "料金", "価格", "plan", "plans", "プラ
 _MY_PLAN_CMDS       = {"マイプラン", "現在のプラン", "プラン確認", "myplan"}
 _TRIAL_CMDS         = {"お試し申し込み", "お試し購入", "トライアル申し込み", "trial申し込み"}
 _BASIC_CMDS         = {"ベーシック申し込み", "ベーシック購入", "basic申し込み"}
+_NUMEROLOGY_CMDS    = {"数秘術", "数秘", "ライフパス", "運命数", "numerology"}
+_PERSONAL_CMDS      = {"個人鑑定", "パーソナル鑑定", "personal鑑定"}
 _PREMIUM_CMDS       = {"プレミアム申し込み", "プレミアム購入", "premium申し込み"}
 _DAILY_FORTUNE_CMDS = {"今日の運勢", "今日の運気", "デイリー占い", "daily占い"}
 _CANCEL_CMDS        = {"解約", "キャンセル", "プラン解約", "サブスク解約"}
@@ -104,6 +112,48 @@ app           = FastAPI(lifespan=lifespan)
 parser        = WebhookParser(os.environ["LINE_CHANNEL_SECRET"])
 configuration = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
 reader        = TarotReader()
+
+# ── Conversation state (in-memory, 10 min TTL) ─────────────────────────────────
+# states: "numerology_birthday" | "personal_name" | "personal_birthday"
+_conv: dict = {}
+
+def _get_conv(user_id: str) -> Optional[dict]:
+    s = _conv.get(user_id)
+    if s and (time.time() - s["ts"]) < 600:
+        return s
+    _conv.pop(user_id, None)
+    return None
+
+def _set_conv(user_id: str, state: str, data: Optional[dict] = None) -> None:
+    _conv[user_id] = {"state": state, "data": data or {}, "ts": time.time()}
+
+def _clear_conv(user_id: str) -> None:
+    _conv.pop(user_id, None)
+
+
+# ── Numerology helpers ──────────────────────────────────────────────────────────
+
+def _parse_birthdate(text: str) -> Optional[tuple]:
+    """Return (year, month, day) or None."""
+    patterns = [
+        r"(\d{4})[年/\-.](\d{1,2})[月/\-.](\d{1,2})",
+        r"(\d{2})[年/\-.](\d{1,2})[月/\-.](\d{1,2})",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text)
+        if m:
+            y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if y < 100:
+                y += 1900
+            if 1 <= mo <= 12 and 1 <= d <= 31:
+                return y, mo, d
+    return None
+
+def _life_path(year: int, month: int, day: int) -> int:
+    total = sum(int(c) for c in f"{year}{month:02d}{day:02d}")
+    while total > 9 and total not in (11, 22, 33):
+        total = sum(int(c) for c in str(total))
+    return total
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -290,6 +340,66 @@ async def webhook(
             await _handle_purchase(event.reply_token, "premium", user_id, "プレミアムプラン（¥1,980/月）")
             continue
 
+        # ── Conversation state handling ──
+        conv = _get_conv(user_id)
+        if conv:
+            state = conv["state"]
+            data  = conv["data"]
+
+            # キャンセル
+            if text in {"キャンセル", "cancel", "やめる", "戻る"}:
+                _clear_conv(user_id)
+                await _reply(event.reply_token, "キャンセルしました。\n他に占いたいことがあればいつでもどうぞ🔮")
+                continue
+
+            # 数秘術 → 生年月日待ち
+            if state == "numerology_birthday":
+                parsed = _parse_birthdate(text)
+                if not parsed:
+                    await _reply(event.reply_token,
+                        "生年月日を認識できませんでした。\n"
+                        "例）1990年5月15日 または 1990/05/15\n\n"
+                        "「キャンセル」で中断できます。")
+                    continue
+                _clear_conv(user_id)
+                y, mo, d = parsed
+                lp = _life_path(y, mo, d)
+                birthdate_str = f"{y}年{mo}月{d}日"
+                reply = await reader.get_numerology_reading(birthdate_str, lp)
+                await _reply(event.reply_token, reply)
+                await increment_daily_usage(user_id)
+                continue
+
+            # 個人鑑定 → お名前待ち
+            if state == "personal_name":
+                name = text.strip()
+                _set_conv(user_id, "personal_birthday", {"name": name})
+                await _reply(event.reply_token,
+                    f"{name}様ですね✨\n\n"
+                    "次に生年月日を教えてください。\n"
+                    "例）1990年5月15日\n\n「キャンセル」で中断できます。")
+                continue
+
+            # 個人鑑定 → 生年月日待ち
+            if state == "personal_birthday":
+                parsed = _parse_birthdate(text)
+                if not parsed:
+                    await _reply(event.reply_token,
+                        "生年月日を認識できませんでした。\n"
+                        "例）1990年5月15日 または 1990/05/15\n\n"
+                        "「キャンセル」で中断できます。")
+                    continue
+                _clear_conv(user_id)
+                name = data.get("name", "あなた")
+                y, mo, d = parsed
+                lp = _life_path(y, mo, d)
+                birthdate_str = f"{y}年{mo}月{d}日"
+                reply, cards = await reader.get_personal_reading(name, birthdate_str, lp)
+                await _reply(event.reply_token, reply)
+                await save_reading(user_id, f"個人鑑定: {name}", cards, reply)
+                await increment_daily_usage(user_id)
+                continue
+
         # ── Resolve subscription plan ──
         plan_type = await _resolve_plan(user_id)
         plan_cfg  = PLANS[plan_type]
@@ -326,6 +436,32 @@ async def webhook(
                 await _reply(event.reply_token, reply)
                 await save_reading(user_id, text, cards, reply)
                 await increment_daily_usage(user_id)
+            continue
+
+        # ── Numerology (basic+) ──
+        if text in _NUMEROLOGY_CMDS:
+            if not plan_cfg.has_numerology:
+                await _reply(event.reply_token, get_upgrade_prompt(plan_type, "数秘術"))
+            else:
+                _set_conv(user_id, "numerology_birthday")
+                await _reply(event.reply_token,
+                    "🔢 数秘術鑑定へようこそ！\n\n"
+                    "生年月日を教えてください。\n"
+                    "例）1990年5月15日\n\n"
+                    "「キャンセル」で中断できます。")
+            continue
+
+        # ── Personal reading (premium only) ──
+        if text in _PERSONAL_CMDS:
+            if not plan_cfg.has_personal_reading:
+                await _reply(event.reply_token, get_upgrade_prompt(plan_type, "個人鑑定"))
+            else:
+                _set_conv(user_id, "personal_name")
+                await _reply(event.reply_token,
+                    "🌟 個人鑑定へようこそ！\n\n"
+                    "お名前を教えてください。\n"
+                    "（例：山田 太郎）\n\n"
+                    "「キャンセル」で中断できます。")
             continue
 
         # ── Daily limit check ──
